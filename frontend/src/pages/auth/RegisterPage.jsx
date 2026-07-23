@@ -79,7 +79,7 @@ export default function RegisterPage() {
           <p className="auth-subtitle">Register as a patient to begin your assessment</p>
 
           <form onSubmit={handleSubmit} className="auth-form">
-            <div className="form-grid-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="form-group-wrapper">
                 <label className="form-label">Full Name</label>
                 <div className="form-input-container">
@@ -104,7 +104,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="form-grid-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="form-group-wrapper">
                 <label className="form-label">Date of Birth</label>
                 <div className="form-input-container">
@@ -122,7 +122,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="form-grid-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="form-group-wrapper">
                 <label className="form-label">Password</label>
                 <div className="form-input-container">
