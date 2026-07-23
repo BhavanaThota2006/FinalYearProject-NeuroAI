@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
           <div className="auth-mobile-logo-icon">
             <FiHeart className="text-white text-xl" />
           </div>
-          <h1 className="auth-mobile-logo-text">NeuroAI</h1>
+          <h1 className="auth-mobile-logo-text">AetherMind AI</h1>
         </div>
 
         <div className="glass-card p-8">

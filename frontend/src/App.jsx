@@ -2,6 +2,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 
+// Landing Page
+import LandingPage from './pages/LandingPage';
+
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -41,7 +44,10 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* Public Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+
+      {/* Public Auth Routes */}
       <Route path="/login" element={isAuthenticated ? <Navigate to={user?.role === 'doctor' ? '/doctor/dashboard' : '/patient/dashboard'} /> : <LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -60,8 +66,8 @@ function AppRoutes() {
       <Route path="/doctor/search" element={<ProtectedRoute role="doctor"><DoctorDashboard /></ProtectedRoute>} />
       <Route path="/doctor/patients" element={<ProtectedRoute role="doctor"><DoctorDashboard /></ProtectedRoute>} />
 
-      {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* Catch-all redirects to Landing Page */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

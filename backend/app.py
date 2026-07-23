@@ -1,5 +1,5 @@
 """
-NeuroAI Backend — Flask Application
+AetherMind AI Backend — Flask Application
 Explainable Multimodal Fusion for Early Alzheimer's Disease Prediction
 """
 

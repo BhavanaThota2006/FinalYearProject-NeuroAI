@@ -118,7 +118,7 @@ def evaluate_answer(current_user):
             score = 1
 
     elif question_id == 'hospital':
-        expected_answer = "NeuroAI Hospital/Apollo/Care"
+        expected_answer = "AetherMind AI Hospital/Apollo/Care"
         if any(w in norm_text for w in ["neuro", "hospital", "clinic", "apollo", "care"]):
             score = 1
         elif lang.startswith('te') and any(w in recognized_text for w in ["న్యూరో", "హాస్పిటల్", "ఆసుపత్రి", "క్లినిక్"]):

@@ -4,6 +4,7 @@ Doctor Routes — Search patients and view patient details
 
 from flask import Blueprint, request, jsonify
 from services.auth_middleware import token_required
+from extensions import db
 
 doctor_bp = Blueprint('doctor', __name__)
 
@@ -11,15 +12,23 @@ doctor_bp = Blueprint('doctor', __name__)
 @doctor_bp.route('/search', methods=['GET'])
 @token_required
 def search_patients(current_user):
-    """Search patients by name or email."""
+    """Search patients by name, email, or patient ID."""
     from models.db_models import Patient
 
     query = request.args.get('q', '')
     if not query:
         return jsonify({'patients': []}), 200
 
+    filters = [
+        Patient.name.ilike(f'%{query}%'),
+        Patient.email.ilike(f'%{query}%'),
+    ]
+    # Support numeric patient ID search
+    if query.isdigit():
+        filters.append(Patient.id == int(query))
+
     patients = Patient.query.filter(
-        (Patient.name.ilike(f'%{query}%')) | (Patient.email.ilike(f'%{query}%'))
+        db.or_(*filters)
     ).limit(20).all()
 
     return jsonify({
@@ -31,6 +40,77 @@ def search_patients(current_user):
             'gender': p.gender,
             'phone': p.phone,
         } for p in patients]
+    }), 200
+
+
+@doctor_bp.route('/patients', methods=['GET'])
+@token_required
+def list_all_patients(current_user):
+    """List all patients with pagination and sorting."""
+    from models.db_models import Patient, CognitiveAssessment
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    sort_by = request.args.get('sort_by', 'created_at')
+    sort_order = request.args.get('sort_order', 'desc')
+
+    # Validate sort column
+    sort_columns = {
+        'name': Patient.name,
+        'email': Patient.email,
+        'created_at': Patient.created_at,
+        'id': Patient.id,
+    }
+    sort_col = sort_columns.get(sort_by, Patient.created_at)
+    if sort_order == 'asc':
+        sort_col = sort_col.asc()
+    else:
+        sort_col = sort_col.desc()
+
+    pagination = Patient.query.order_by(sort_col).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    return jsonify({
+        'patients': [{
+            'id': p.id,
+            'name': p.name,
+            'email': p.email,
+            'dob': p.dob.isoformat() if p.dob else None,
+            'gender': p.gender,
+            'phone': p.phone,
+            'created_at': p.created_at.isoformat() if p.created_at else None,
+        } for p in pagination.items],
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': pagination.page,
+        'per_page': pagination.per_page,
+    }), 200
+
+
+@doctor_bp.route('/stats', methods=['GET'])
+@token_required
+def get_stats(current_user):
+    """Get dashboard statistics for doctor."""
+    from models.db_models import Patient, CognitiveAssessment, ClinicalAssessment
+    from datetime import datetime, timedelta
+
+    total_patients = Patient.query.count()
+    today = datetime.utcnow().date()
+    assessments_today = CognitiveAssessment.query.filter(
+        db.func.date(CognitiveAssessment.assessment_date) == today
+    ).count() + ClinicalAssessment.query.filter(
+        db.func.date(ClinicalAssessment.assessment_date) == today
+    ).count()
+
+    # Patients registered in the last 7 days
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    new_patients = Patient.query.filter(Patient.created_at >= week_ago).count()
+
+    return jsonify({
+        'total_patients': total_patients,
+        'assessments_today': assessments_today,
+        'new_patients_week': new_patients,
     }), 200
 
 

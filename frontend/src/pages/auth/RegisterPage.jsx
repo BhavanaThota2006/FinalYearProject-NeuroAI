@@ -47,7 +47,7 @@ export default function RegisterPage() {
             <div className="auth-left-brand-logo">
               <FiHeart className="text-white text-2xl" />
             </div>
-            <h1 className="auth-left-brand-title">NeuroAI</h1>
+            <h1 className="auth-left-brand-title">AetherMind AI</h1>
           </div>
         </div>
         <div className="auth-left-body">
@@ -58,7 +58,7 @@ export default function RegisterPage() {
             Register to get access to AI-powered cognitive assessments and early Alzheimer's detection.
           </p>
         </div>
-        <p className="auth-left-footer">© 2026 NeuroAI Platform</p>
+        <p className="auth-left-footer">© 2026 AetherMind AI Platform</p>
       </div>
 
       {/* Right Form Panel */}
@@ -72,7 +72,7 @@ export default function RegisterPage() {
             <div className="auth-mobile-logo-icon">
               <FiHeart className="text-white text-xl" />
             </div>
-            <h1 className="auth-mobile-logo-text">NeuroAI</h1>
+            <h1 className="auth-mobile-logo-text">AetherMind AI</h1>
           </div>
 
           <h2 className="auth-title">Create Account</h2>

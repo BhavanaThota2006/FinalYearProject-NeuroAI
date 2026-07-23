@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 // ===== EXERCISE CONFIGURATIONS =====
-// Assigned based on prediction: CN=Sudoku, MCI=ShoppingList, Early AD=PictureMatching, Moderate=ObjectRecognition, Severe=FamilyFace
+// Assigned based on prediction: CN=Sudoku, MCI=ShoppingList, Early AD=PictureMatching, Moderate=ObjectRecognition
 
 // ===== SUDOKU (for Healthy/CN) =====
 function SudokuGame({ onComplete }) {
@@ -241,44 +241,7 @@ function ObjectRecognitionGame({ onComplete }) {
   );
 }
 
-// ===== FAMILY FACE RECOGNITION (for Severe AD) =====
-function FamilyFaceGame({ onComplete }) {
-  const faces = [
-    { emoji: '👨', name: 'Father', options: ['Father', 'Uncle', 'Brother', 'Friend'] },
-    { emoji: '👩', name: 'Mother', options: ['Aunt', 'Mother', 'Sister', 'Neighbor'] },
-    { emoji: '👧', name: 'Daughter', options: ['Niece', 'Friend', 'Daughter', 'Cousin'] },
-    { emoji: '👦', name: 'Son', options: ['Nephew', 'Son', 'Student', 'Brother'] },
-  ];
-  const [current, setCurrent] = useState(0);
-  const [score, setScore] = useState(0);
 
-  const handleAnswer = (answer) => {
-    const newScore = answer === faces[current].name ? score + 1 : score;
-    setScore(newScore);
-    if (current < faces.length - 1) {
-      setCurrent(current + 1);
-    } else {
-      onComplete(Math.round((newScore / faces.length) * 100));
-    }
-  };
-
-  return (
-    <div className="space-y-4 text-center">
-      <h3 className="text-lg font-bold text-gray-800">👨‍👩‍👧‍👦 Family Face Recognition</h3>
-      <p className="text-sm text-gray-500">Person {current + 1} of {faces.length}</p>
-      <div className="text-8xl my-8">{faces[current].emoji}</div>
-      <p className="text-lg font-medium text-gray-700 mb-4">Who is this person?</p>
-      <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
-        {faces[current].options.map(opt => (
-          <button key={opt} onClick={() => handleAnswer(opt)}
-            className="p-4 rounded-xl bg-gray-100 hover:bg-primary-50 hover:border-primary-300 border-2 border-transparent font-medium text-gray-700 transition-all">
-            {opt}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ===== MAIN EXERCISE PAGE =====
 export default function BrainExercise() {
@@ -295,7 +258,7 @@ export default function BrainExercise() {
     MCI: { name: 'Shopping List Memory', component: ShoppingListGame, icon: '🛒', desc: 'Test your memory skills' },
     'Early AD': { name: 'Picture Matching', component: PictureMatchingGame, icon: '🎯', desc: 'Match pairs of pictures' },
     'Moderate AD': { name: 'Object Recognition', component: ObjectRecognitionGame, icon: '🔍', desc: 'Identify common objects' },
-    'Severe AD': { name: 'Family Face Recognition', component: FamilyFaceGame, icon: '👨‍👩‍👧‍👦', desc: 'Recognize family members' },
+
   };
 
   const assignedExercise = exercises[prediction] || exercises['MCI'];

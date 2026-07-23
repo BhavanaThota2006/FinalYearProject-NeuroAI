@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { searchPatients, getPatientDetail } from '../../services/api';
+import { searchPatients, getPatientDetail, getAllPatients, getDoctorStats } from '../../services/api';
 import DashboardLayout from '../../components/DashboardLayout';
 import StatsCard from '../../components/StatsCard';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import {
   FiSearch, FiUsers, FiClipboard, FiActivity, FiImage, FiDownload,
-  FiChevronRight, FiArrowLeft, FiFileText, FiCpu, FiCheckCircle
+  FiChevronRight, FiArrowLeft, FiChevronLeft, FiAlertCircle, FiRefreshCw
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -16,80 +16,104 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('search'); // 'search' | 'all'
   const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientDetail, setPatientDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({ total_patients: 0, assessments_today: 0, new_patients_week: 0 });
+
+  // Pagination & sorting state
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState('desc');
+
+  // Fetch stats on mount
+  useEffect(() => {
+    getDoctorStats()
+      .then(({ data }) => setStats(data))
+      .catch(() => {});
+  }, []);
 
   // Search patients
   const handleSearch = async (e) => {
     e?.preventDefault();
     if (!searchQuery.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const { data } = await searchPatients(searchQuery);
       setPatients(data.patients || []);
-    } catch {
-      // Demo data
-      setPatients([
-        { id: 1, name: 'John Doe', email: 'john@example.com', dob: '1958-03-15', gender: 'Male', last_assessment: '2026-07-15' },
-        { id: 2, name: 'Jane Smith', email: 'jane@example.com', dob: '1962-07-22', gender: 'Female', last_assessment: '2026-07-14' },
-        { id: 3, name: 'Robert Johnson', email: 'robert@example.com', dob: '1955-11-08', gender: 'Male', last_assessment: '2026-07-13' },
-      ]);
+      if ((data.patients || []).length === 0) {
+        setError('No patients found matching your search.');
+      }
+    } catch (err) {
+      setError('Failed to search patients. Please try again.');
+      setPatients([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fetch all patients (paginated)
+  const fetchAllPatients = async (p = page, sb = sortBy, so = sortOrder) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data } = await getAllPatients(p, 10, sb, so);
+      setPatients(data.patients || []);
+      setTotalPages(data.pages || 1);
+      setTotalCount(data.total || 0);
+      setPage(data.current_page || 1);
+    } catch (err) {
+      setError('Failed to load patients. Please try again.');
+      setPatients([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // When tab changes, fetch accordingly
+  useEffect(() => {
+    if (activeTab === 'all') {
+      fetchAllPatients(1, sortBy, sortOrder);
+    } else {
+      setPatients([]);
+      setError(null);
+    }
+  }, [activeTab]);
+
+  // Handle sort change
+  const handleSort = (column) => {
+    const newOrder = sortBy === column && sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortBy(column);
+    setSortOrder(newOrder);
+    fetchAllPatients(1, column, newOrder);
   };
 
   // View patient detail
   const viewPatient = async (patient) => {
     setSelectedPatient(patient);
     setLoading(true);
+    setError(null);
     try {
       const { data } = await getPatientDetail(patient.id);
       setPatientDetail(data);
-    } catch {
-      // Demo data
-      setPatientDetail({
-        mmse: { orientation: 4, registration: 2, attention: 3, recall: 1, language: 6, visuospatial: 1, total: 17, date: '2026-07-15' },
-        clinical: { age: 68, gender: 'Male', education: 16, faq_score: 9, cn_prob: 0.12, mci_prob: 0.48, ad_prob: 0.40, prediction: 'MCI', date: '2026-07-15' },
-        mri: { cn_prob: 0.08, mci_prob: 0.42, ad_prob: 0.50, prediction: 'AD', date: '2026-07-15', gradcam_url: null },
-        fusion: { cn_prob: 0.10, mci_prob: 0.45, ad_prob: 0.45, prediction: 'MCI', date: '2026-07-15' },
-        shap: { features: ['MMSE', 'FAQ', 'AGE', 'PTEDUCAT', 'PTGENDER'], importance: [0.35, 0.28, 0.18, 0.12, 0.07] },
-        report: { id: 'report-1' },
-      });
+    } catch (err) {
+      setError('Failed to load patient details.');
+      toast.error('Failed to load patient details');
     } finally {
       setLoading(false);
     }
   };
 
-  // Polling hook: Query database updates automatically every 5 seconds
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      handleSearch();
-    }
-    const interval = setInterval(() => {
-      if (searchQuery.trim()) {
-        searchPatients(searchQuery)
-          .then(({ data }) => setPatients(data.patients || []))
-          .catch(() => {});
-      }
-      if (selectedPatient) {
-        getPatientDetail(selectedPatient.id)
-          .then(({ data }) => setPatientDetail(data))
-          .catch(() => {});
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [searchQuery, selectedPatient?.id]);
-
   // Download report
   const handleDownload = async () => {
-    try {
-      toast.success('Report download will be available after backend integration');
-    } catch {}
+    toast.success('Report download will be available after backend integration');
   };
 
   // ===== PATIENT DETAIL VIEW =====
@@ -116,9 +140,9 @@ export default function DoctorDashboard() {
       <DashboardLayout>
         <div className="dashboard-content-wrapper">
           {/* Back Button */}
-          <button onClick={() => { setSelectedPatient(null); setPatientDetail(null); }}
-            className="flex items-center gap-2 text-gray-500 hover:text-gray-700 font-medium mb-6 transition-colors">
-            <FiArrowLeft /> Back to Search
+          <button onClick={() => { setSelectedPatient(null); setPatientDetail(null); setError(null); }}
+            className="flex items-center gap-2 text-gray-500 hover:text-gray-700 font-medium mb-6 transition-colors cursor-pointer">
+            <FiArrowLeft /> Back to {activeTab === 'all' ? 'All Patients' : 'Search'}
           </button>
 
           {/* Patient Header */}
@@ -131,14 +155,11 @@ export default function DoctorDashboard() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="live-indicator chip-green py-0.5 px-2 font-semibold flex items-center gap-1 shadow-sm">
-                      <span className="live-dot green w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                      <span className="live-text" style={{ fontSize: '0.65rem' }}>EHR Connected</span>
-                    </span>
                     <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold uppercase">{selectedPatient.gender}</span>
+                    <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs font-semibold">ID: {selectedPatient.id}</span>
                   </div>
                   <h2 className="text-2xl font-extrabold text-gray-800 tracking-tight">{selectedPatient.name}</h2>
-                  <p className="text-sm text-gray-500">{selectedPatient.email} • DOB: {selectedPatient.dob}</p>
+                  <p className="text-sm text-gray-500">{selectedPatient.email} • DOB: {selectedPatient.dob || 'N/A'}</p>
                 </div>
               </div>
               <button onClick={handleDownload} className="btn-primary flex items-center gap-2 cursor-pointer">
@@ -186,7 +207,7 @@ export default function DoctorDashboard() {
                 <span className={`inline-block px-5 py-2 rounded-full font-extrabold text-sm shadow-sm ${
                   d.clinical?.prediction === 'CN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                   d.clinical?.prediction === 'MCI' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-red-50 text-red-700 border border-red-100'
-                }`}>{d.clinical?.prediction === 'CN' ? 'Cognitively Normal (CN)' : d.clinical?.prediction === 'MCI' ? 'Mild Cognitive Impairment (MCI)' : d.clinical?.prediction === 'AD' ? 'Alzheimer\'s Disease (AD)' : 'N/A'}</span>
+                }`}>{d.clinical?.prediction === 'CN' ? 'Cognitively Normal (CN)' : d.clinical?.prediction === 'MCI' ? 'Mild Cognitive Impairment (MCI)' : d.clinical?.prediction === 'AD' ? "Alzheimer's Disease (AD)" : 'N/A'}</span>
               </div>
               <Bar data={probChartData(d.clinical, 'Clinical')} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }} />
             </motion.div>
@@ -200,7 +221,7 @@ export default function DoctorDashboard() {
                 <span className={`inline-block px-5 py-2 rounded-full font-extrabold text-sm shadow-sm ${
                   d.mri?.prediction === 'CN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                   d.mri?.prediction === 'MCI' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-red-50 text-red-700 border border-red-100'
-                }`}>{d.mri?.prediction === 'CN' ? 'Cognitively Normal (CN)' : d.mri?.prediction === 'MCI' ? 'Mild Cognitive Impairment (MCI)' : d.mri?.prediction === 'AD' ? 'Alzheimer\'s Disease (AD)' : 'N/A'}</span>
+                }`}>{d.mri?.prediction === 'CN' ? 'Cognitively Normal (CN)' : d.mri?.prediction === 'MCI' ? 'Mild Cognitive Impairment (MCI)' : d.mri?.prediction === 'AD' ? "Alzheimer's Disease (AD)" : 'N/A'}</span>
               </div>
               <Bar data={probChartData(d.mri, 'MRI')} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }} />
             </motion.div>
@@ -267,7 +288,24 @@ export default function DoctorDashboard() {
     );
   }
 
-  // ===== MAIN SEARCH VIEW =====
+  // ===== LOADING STATE =====
+  if (loading && !patients.length && !error) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center" style={{ minHeight: '60vh' }}>
+          <div className="brain-loader" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Sort indicator
+  const SortIcon = ({ column }) => {
+    if (sortBy !== column) return <span className="text-gray-300 ml-1">↕</span>;
+    return <span className="text-blue-500 ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  // ===== MAIN VIEW =====
   return (
     <DashboardLayout>
       <div className="dashboard-content-wrapper relative z-10">
@@ -296,62 +334,180 @@ export default function DoctorDashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-          <StatsCard icon={<FiUsers className="w-5 h-5" />} label="Total Patients" value="—" color="blue" delay={0} />
-          <StatsCard icon={<FiClipboard className="w-5 h-5" />} label="Assessments Today" value="—" color="green" delay={0.1} />
-          <StatsCard icon={<FiActivity className="w-5 h-5" />} label="Pending Reviews" value="—" color="orange" delay={0.2} />
+          <StatsCard icon={<FiUsers className="w-5 h-5" />} label="Total Patients" value={stats.total_patients} color="blue" delay={0} />
+          <StatsCard icon={<FiClipboard className="w-5 h-5" />} label="Assessments Today" value={stats.assessments_today} color="green" delay={0.1} />
+          <StatsCard icon={<FiActivity className="w-5 h-5" />} label="New This Week" value={stats.new_patients_week} color="orange" delay={0.2} />
         </div>
 
-        {/* Search Bar */}
-        <motion.form onSubmit={handleSearch} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="glass-card p-6 mb-8 border border-white shadow-md rounded-3xl">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="form-input pl-11 rounded-2xl border border-gray-200 focus:border-blue-500 shadow-sm transition-all" placeholder="Search patient by name or email..." />
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('search')}
+            className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all cursor-pointer ${
+              activeTab === 'search'
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}>
+            <FiSearch className="inline mr-2" />Search Patients
+          </button>
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all cursor-pointer ${
+              activeTab === 'all'
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}>
+            <FiUsers className="inline mr-2" />All Patients {totalCount > 0 && activeTab === 'all' ? `(${totalCount})` : ''}
+          </button>
+        </div>
+
+        {/* Search Bar (only in search tab) */}
+        {activeTab === 'search' && (
+          <motion.form onSubmit={handleSearch} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="glass-card p-6 mb-8 border border-white shadow-md rounded-3xl">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                  className="form-input pl-11 rounded-2xl border border-gray-200 focus:border-blue-500 shadow-sm transition-all" placeholder="Search by name, email, or patient ID..." />
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2 rounded-2xl cursor-pointer">
+                {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiSearch />}
+                Search
+              </button>
             </div>
-            <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2 rounded-2xl cursor-pointer">
-              {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiSearch />}
-              Search Catalog
+          </motion.form>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="glass-card p-8 text-center mb-6 border border-orange-100">
+            <FiAlertCircle className="text-4xl text-orange-400 mx-auto mb-3" />
+            <p className="text-gray-600 font-medium">{error}</p>
+            <button onClick={() => activeTab === 'all' ? fetchAllPatients(page, sortBy, sortOrder) : handleSearch()}
+              className="mt-4 btn-secondary flex items-center gap-2 mx-auto cursor-pointer">
+              <FiRefreshCw /> Retry
             </button>
-          </div>
-        </motion.form>
+          </motion.div>
+        )}
 
         {/* Patient Results */}
         <AnimatePresence>
           {patients.length > 0 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-                Search Results ({patients.length})
-              </h3>
-              <div className="grid grid-cols-1 gap-3">
-                {patients.map((patient, i) => (
-                  <motion.div key={patient.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="glass-card p-5 group flex items-center justify-between gap-4 cursor-pointer hover:shadow-lg hover:border-blue-200 border border-gray-100 rounded-2xl transition-all"
-                    onClick={() => viewPatient(patient)}>
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md group-hover:scale-105 transition-transform">
-                        {patient.name[0]}
-                      </div>
-                      <div>
-                        <p className="font-extrabold text-gray-800 group-hover:text-blue-600 transition-colors">{patient.name}</p>
-                        <p className="text-xs text-gray-500 mt-1">{patient.email} • {patient.gender} • DOB: {patient.dob}</p>
-                      </div>
+              {activeTab === 'all' && (
+                <div className="glass-card overflow-hidden rounded-2xl border border-gray-100 shadow-md">
+                  {/* Table Header */}
+                  <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50/80 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <div className="col-span-1 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('id')}>
+                      ID <SortIcon column="id" />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-400 font-semibold hidden md:inline">Last Sync: {patient.last_assessment || 'N/A'}</span>
-                      <FiChevronRight className="text-gray-400 group-hover:text-blue-500 group-hover:translate-x-1.5 transition-all text-lg" />
+                    <div className="col-span-3 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('name')}>
+                      Patient Name <SortIcon column="name" />
                     </div>
-                  </motion.div>
-                ))}
-              </div>
+                    <div className="col-span-3 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('email')}>
+                      Email <SortIcon column="email" />
+                    </div>
+                    <div className="col-span-2">Gender</div>
+                    <div className="col-span-2 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('created_at')}>
+                      Registered <SortIcon column="created_at" />
+                    </div>
+                    <div className="col-span-1 text-right">Action</div>
+                  </div>
+                  {/* Table Rows */}
+                  {patients.map((patient, i) => (
+                    <motion.div key={patient.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.03 }}
+                      className="grid grid-cols-12 gap-4 p-4 items-center border-b border-gray-50 hover:bg-blue-50/30 transition-colors cursor-pointer group"
+                      onClick={() => viewPatient(patient)}>
+                      <div className="col-span-1 text-sm text-gray-500 font-mono">#{patient.id}</div>
+                      <div className="col-span-3 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow">
+                          {patient.name[0]}
+                        </div>
+                        <span className="font-semibold text-gray-800 text-sm group-hover:text-blue-600 transition-colors">{patient.name}</span>
+                      </div>
+                      <div className="col-span-3 text-sm text-gray-500 truncate">{patient.email}</div>
+                      <div className="col-span-2">
+                        <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs font-semibold">{patient.gender || '—'}</span>
+                      </div>
+                      <div className="col-span-2 text-xs text-gray-400">{patient.created_at ? new Date(patient.created_at).toLocaleDateString() : '—'}</div>
+                      <div className="col-span-1 text-right">
+                        <FiChevronRight className="text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all inline" />
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {activeTab === 'search' && (
+                <>
+                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                    Search Results ({patients.length})
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3">
+                    {patients.map((patient, i) => (
+                      <motion.div key={patient.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="glass-card p-5 group flex items-center justify-between gap-4 cursor-pointer hover:shadow-lg hover:border-blue-200 border border-gray-100 rounded-2xl transition-all"
+                        onClick={() => viewPatient(patient)}>
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md group-hover:scale-105 transition-transform">
+                            {patient.name[0]}
+                          </div>
+                          <div>
+                            <p className="font-extrabold text-gray-800 group-hover:text-blue-600 transition-colors">{patient.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">{patient.email} • {patient.gender} • ID: {patient.id}</p>
+                          </div>
+                        </div>
+                        <FiChevronRight className="text-gray-400 group-hover:text-blue-500 group-hover:translate-x-1.5 transition-all text-lg" />
+                      </motion.div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Pagination (only for 'all' tab) */}
+              {activeTab === 'all' && totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6">
+                  <p className="text-sm text-gray-500">
+                    Page {page} of {totalPages} ({totalCount} patients)
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => fetchAllPatients(page - 1, sortBy, sortOrder)}
+                      disabled={page <= 1}
+                      className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
+                      <FiChevronLeft /> Prev
+                    </button>
+                    <button
+                      onClick={() => fetchAllPatients(page + 1, sortBy, sortOrder)}
+                      disabled={page >= totalPages}
+                      className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
+                      Next <FiChevronRight />
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Empty state for 'all' tab with no patients */}
+        {activeTab === 'all' && patients.length === 0 && !loading && !error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="glass-card p-12 text-center border border-gray-100">
+            <FiUsers className="text-5xl text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-600 mb-2">No Patients Found</h3>
+            <p className="text-gray-400 text-sm">No patients have registered yet.</p>
+          </motion.div>
+        )}
       </div>
     </DashboardLayout>
   );

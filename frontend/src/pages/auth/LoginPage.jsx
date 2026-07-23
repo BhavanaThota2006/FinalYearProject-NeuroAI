@@ -43,7 +43,7 @@ export default function LoginPage() {
             <div className="auth-left-brand-logo">
               <FiHeart className="text-white text-2xl" />
             </div>
-            <h1 className="auth-left-brand-title">NeuroAI</h1>
+            <h1 className="auth-left-brand-title">AetherMind AI</h1>
           </div>
           <p className="auth-left-subtitle">Alzheimer's Detection Platform</p>
         </div>
@@ -72,7 +72,7 @@ export default function LoginPage() {
         </div>
 
         <p className="auth-left-footer">
-          © 2026 NeuroAI Platform — B.Tech Final Year Project
+          © 2026 AetherMind AI Platform — B.Tech Final Year Project
         </p>
       </div>
 
@@ -89,7 +89,7 @@ export default function LoginPage() {
             <div className="auth-mobile-logo-icon">
               <FiHeart className="text-white text-xl" />
             </div>
-            <h1 className="auth-mobile-logo-text">NeuroAI</h1>
+            <h1 className="auth-mobile-logo-text">AetherMind AI</h1>
           </div>
 
           <h2 className="auth-title">Welcome Back</h2>

@@ -62,6 +62,9 @@ export const getExerciseHistory = (patientId) => API.get(`/exercise/history/${pa
 
 // ========== Doctor APIs ==========
 export const searchPatients = (query) => API.get(`/doctor/search?q=${query}`);
+export const getAllPatients = (page = 1, perPage = 10, sortBy = 'created_at', sortOrder = 'desc') =>
+  API.get(`/doctor/patients?page=${page}&per_page=${perPage}&sort_by=${sortBy}&sort_order=${sortOrder}`);
+export const getDoctorStats = () => API.get('/doctor/stats');
 export const getPatientDetail = (patientId) => API.get(`/doctor/patient/${patientId}`);
 
 export default API;

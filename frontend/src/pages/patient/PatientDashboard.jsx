@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getAssessmentHistory, getExerciseHistory } from '../../services/api';
@@ -6,154 +6,9 @@ import DashboardLayout from '../../components/DashboardLayout';
 import StatsCard from '../../components/StatsCard';
 import {
   FiClipboard, FiActivity, FiImage, FiTarget, FiChevronRight,
-  FiCheckCircle, FiAlertTriangle, FiMic, FiMicOff, FiVolume2
+  FiCheckCircle, FiAlertTriangle
 } from 'react-icons/fi';
-import { motion, AnimatePresence } from 'framer-motion';
-
-/* ============================================
-   SPEECH-TO-SPEECH ASSISTANT HOOK
-   Uses Web Speech API: SpeechRecognition + SpeechSynthesis
-   ============================================ */
-function useSpeechAssistant() {
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [messages, setMessages] = useState([]);
-  const recognitionRef = useRef(null);
-  const synthRef = useRef(window.speechSynthesis);
-
-  // Initialize Speech Recognition
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
-        } else {
-          interimTranscript += result[0].transcript;
-        }
-      }
-      setTranscript(interimTranscript || finalTranscript);
-      if (finalTranscript) {
-        handleUserMessage(finalTranscript.trim());
-      }
-    };
-
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-
-    recognitionRef.current = recognition;
-  }, []);
-
-  // Process user speech and generate AI response
-  const handleUserMessage = useCallback((text) => {
-    setMessages((prev) => [...prev, { role: 'user', text }]);
-    setTranscript('');
-
-    // Simple AI assistant logic for patient dashboard
-    const lower = text.toLowerCase();
-    let response = '';
-
-    if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
-      response = 'Hello! Welcome to NeuroAI. I can help you navigate your cognitive health assessment. You can say "start assessment", "view report", "upload MRI", or ask me about your scores.';
-    } else if (lower.includes('start assessment') || lower.includes('begin assessment') || lower.includes('take test')) {
-      response = 'Sure! I will navigate you to the MMSE cognitive assessment. This test has 6 sections: Orientation, Registration, Attention, Recall, Language, and Visuospatial. It takes about 15 minutes.';
-    } else if (lower.includes('mmse') || lower.includes('score') || lower.includes('my score')) {
-      response = 'Your MMSE score measures cognitive ability out of 30 points. A score of 24 or above is considered normal. Scores between 19 and 23 indicate mild cognitive impairment. Would you like to start the assessment?';
-    } else if (lower.includes('report') || lower.includes('results')) {
-      response = 'I can take you to your clinical report. The report includes your MMSE score, clinical prediction, MRI findings, and personalized recommendations. Say "view report" to proceed.';
-    } else if (lower.includes('mri') || lower.includes('brain scan')) {
-      response = 'You can upload a brain MRI scan for AI analysis. Our deep learning model will analyze the scan and generate a Grad-CAM heatmap showing which brain regions influenced the prediction. Say "upload MRI" to proceed.';
-    } else if (lower.includes('exercise') || lower.includes('brain game') || lower.includes('game')) {
-      response = 'Brain exercises are assigned based on your cognitive assessment results. These include Sudoku for healthy cognition, memory games for mild impairment, and picture matching for early detection cases. Say "start exercise" to begin.';
-    } else if (lower.includes('help') || lower.includes('what can you do')) {
-      response = 'I am your NeuroAI speech assistant. I can help you navigate the platform, explain your scores, start assessments, upload MRI scans, view reports, or begin brain exercises. Just ask me anything!';
-    } else if (lower.includes('navigate') || lower.includes('go to')) {
-      if (lower.includes('dashboard')) response = 'You are already on the dashboard. You can see your scores and assessment timeline here.';
-      else if (lower.includes('clinical')) response = 'Navigating to clinical assessment. Please complete the MMSE first if you haven\'t already.';
-      else response = 'Which page would you like to go to? You can say dashboard, assessment, clinical, MRI, report, or exercise.';
-    } else if (lower.includes('alzheimer') || lower.includes('dementia')) {
-      response = "Alzheimer's disease is a progressive neurological disorder. Our platform uses multimodal AI fusion combining clinical assessments and brain MRI analysis for early detection. Early detection can significantly improve outcomes.";
-    } else if (lower.includes('thank')) {
-      response = 'You\'re welcome! I\'m here to help. Take care of your cognitive health. Is there anything else you\'d like to know?';
-    } else {
-      response = `I heard you say "${text}". You can ask me to start an assessment, view your report, upload an MRI, or start a brain exercise. How can I help you?`;
-    }
-
-    // Add AI response with small delay for natural feel
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { role: 'assistant', text: response }]);
-      speak(response);
-    }, 500);
-  }, []);
-
-  // Text-to-Speech
-  const speak = useCallback((text) => {
-    if (!synthRef.current) return;
-    synthRef.current.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    utterance.volume = 0.9;
-
-    // Pick a good English voice
-    const voices = synthRef.current.getVoices();
-    const preferred = voices.find(
-      (v) => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('Samantha'))
-    );
-    if (preferred) utterance.voice = preferred;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    synthRef.current.speak(utterance);
-  }, []);
-
-  // Start listening
-  const startListening = useCallback(() => {
-    if (!recognitionRef.current) return;
-    try {
-      synthRef.current.cancel();
-      setIsSpeaking(false);
-      recognitionRef.current.start();
-      setIsListening(true);
-      setTranscript('');
-    } catch {
-      setIsListening(false);
-    }
-  }, []);
-
-  // Stop listening
-  const stopListening = useCallback(() => {
-    if (!recognitionRef.current) return;
-    recognitionRef.current.stop();
-    setIsListening(false);
-  }, []);
-
-  // Send initial greeting
-  const greet = useCallback(() => {
-    const greeting = 'Hello! I am your NeuroAI voice assistant. I can help you with cognitive assessments, MRI uploads, reports, and brain exercises. How can I help you today?';
-    setMessages([{ role: 'assistant', text: greeting }]);
-    speak(greeting);
-  }, [speak]);
-
-  return {
-    isListening, isSpeaking, transcript, messages,
-    startListening, stopListening, speak, greet,
-  };
-}
+import { motion } from 'framer-motion';
 
 /* ============================================
    PATIENT DASHBOARD
@@ -162,17 +17,12 @@ export default function PatientDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
-  const [showAssistant, setShowAssistant] = useState(false);
-  const messagesEndRef = useRef(null);
-
-  const {
-    isListening, isSpeaking, transcript, messages,
-    startListening, stopListening, greet,
-  } = useSpeechAssistant();
+  const [loading, setLoading] = useState(true);
 
   // Fetch patient data
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const [assessRes, exRes] = await Promise.all([
           getAssessmentHistory(user.id),
@@ -180,34 +30,13 @@ export default function PatientDashboard() {
         ]);
         setData({ assessments: assessRes.data, exercises: exRes.data });
       } catch {
-        setData({
-          assessments: {
-            mmse: { score: 22, date: '2026-07-15' },
-            clinical: { faq_score: 8, prediction: 'MCI', cn_prob: 0.15, mci_prob: 0.55, ad_prob: 0.30 },
-            mri: { prediction: 'MCI', cn_prob: 0.10, mci_prob: 0.60, ad_prob: 0.30 },
-            fusion: { prediction: 'MCI', cn_prob: 0.12, mci_prob: 0.58, ad_prob: 0.30 },
-          },
-          exercises: { type: 'Shopping List Memory', score: 75, date: '2026-07-15' },
-        });
+        setData(null);
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
   }, [user.id]);
-
-  // Auto-scroll chat messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Open assistant with greeting
-  const toggleAssistant = () => {
-    if (!showAssistant) {
-      setShowAssistant(true);
-      setTimeout(() => greet(), 300);
-    } else {
-      setShowAssistant(false);
-    }
-  };
 
   // Timeline steps
   const timeline = [
@@ -218,6 +47,16 @@ export default function PatientDashboard() {
     { label: 'Final Report', icon: <FiCheckCircle />, status: data?.assessments?.fusion ? 'completed' : 'pending', path: '/patient/report' },
     { label: 'Brain Exercise', icon: <FiTarget />, status: data?.exercises?.score ? 'completed' : 'pending', path: '/patient/exercise' },
   ];
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center" style={{ minHeight: '60vh' }}>
+          <div className="brain-loader" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -247,7 +86,7 @@ export default function PatientDashboard() {
               Welcome back, <span className="gradient-text">{user?.name || 'Patient'}</span>
             </h1>
             <p className="text-gray-500 mt-3 text-base max-w-2xl leading-relaxed">
-              Your cognitive health timeline and AI prediction panel. Tap the microphone in the speech assistant below to chat.
+              Your cognitive health timeline and AI prediction panel. Navigate through your assessments, upload MRI scans, and view personalized reports.
             </p>
           </motion.div>
         </div>
@@ -388,111 +227,6 @@ export default function PatientDashboard() {
           </motion.div>
         </div>
       </div>
-
-
-      {/* ============================================
-          FLOATING SPEECH ASSISTANT
-          ============================================ */}
-
-      {/* Floating Mic Button */}
-      <motion.button
-        onClick={toggleAssistant}
-        className={`fixed bottom-8 right-8 z-50 speech-orb ${isListening ? 'listening' : ''}`}
-        whileTap={{ scale: 0.92 }}
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.8, type: 'spring', stiffness: 200 }}
-        title="Click to talk to NeuroAI Assistant"
-      >
-        {isSpeaking ? (
-          <div className="speech-wave">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="speech-wave-bar" style={{ animationDelay: `${i * 0.12}s` }} />
-            ))}
-          </div>
-        ) : isListening ? (
-          <FiMic className="text-white text-2xl animate-pulse-slow" />
-        ) : (
-          <FiMic className="text-white text-2xl" />
-        )}
-
-        {/* Ripple rings when listening */}
-        {isListening && (
-          <>
-            <span className="absolute inset-0 rounded-full border-2 border-blue-400" style={{ animation: 'ripple 1.5s ease-out infinite' }} />
-            <span className="absolute inset-0 rounded-full border-2 border-blue-300" style={{ animation: 'ripple 1.5s ease-out infinite 0.5s' }} />
-          </>
-        )}
-      </motion.button>
-
-      {/* Speech Assistant Panel */}
-      <AnimatePresence>
-        {showAssistant && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-28 right-8 z-50 w-[400px] max-h-[520px] glass-card overflow-hidden flex flex-col"
-            style={{ boxShadow: '0 16px 64px rgba(0,0,0,0.12)' }}
-          >
-            {/* Header */}
-            <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                  <FiVolume2 className="text-lg" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm">NeuroAI Voice Assistant</h4>
-                  <p className="text-blue-100 text-xs flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${isListening ? 'bg-red-400 animate-pulse-slow' : isSpeaking ? 'bg-green-400 animate-pulse-slow' : 'bg-blue-200'}`} />
-                    {isListening ? 'Listening...' : isSpeaking ? 'Speaking...' : 'Ready'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[250px] max-h-[350px]">
-              {messages.map((msg, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`speech-bubble ${msg.role === 'user' ? 'user' : ''}`}
-                >
-                  {msg.text}
-                </motion.div>
-              ))}
-              {transcript && (
-                <div className="speech-bubble user opacity-60 italic">
-                  {transcript}...
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Controls */}
-            <div className="p-4 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  onClick={isListening ? stopListening : startListening}
-                  className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
-                    isListening
-                      ? 'bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600'
-                      : 'bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-105'
-                  }`}
-                >
-                  {isListening ? <FiMicOff className="text-xl" /> : <FiMic className="text-xl" />}
-                </button>
-              </div>
-              <p className="text-center text-xs text-gray-400 mt-3">
-                {isListening ? 'Tap to stop listening' : 'Tap the mic and speak'}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </DashboardLayout>
   );
 }
